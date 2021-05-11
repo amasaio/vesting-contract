@@ -12,7 +12,7 @@ contract TokenVestingFactory is Ownable {
 
     event CreateTokenVesting(address tokenVesting);
 
-    enum VestingType { SeedInvestors, StrategicInvestors, Advisors, Team }
+    enum VestingType { SeedInvestors, StrategicInvestors, Advisors, Team, All }
 
     struct BeneficiaryIndex {
         address tokenVesting;
@@ -27,12 +27,11 @@ contract TokenVestingFactory is Ownable {
     uint256 private _duration;
     uint256 private _decimal;
     
-    constructor (address tokenAddr) {
+    constructor (address tokenAddr, uint256 duration, uint256 interval, uint256 decimal) {
       _tokenAddr = tokenAddr;
-    //   _interval = 30 * 24 * 60 * 60;
-      _interval = 5 * 60;
-      _duration = 48 * _interval;
-      _decimal = 3;
+      _interval = interval * 24 * 60 * 60;
+      _duration = duration * 24 * 60 * 60;
+      _decimal = decimal;
     }    
     
     function create(address beneficiary, uint256 start, uint256 cliff, uint256 initialShare, uint256 periodicShare, bool revocable, VestingType vestingType) onlyOwner public {
@@ -49,8 +48,18 @@ contract TokenVestingFactory is Ownable {
         emit CreateTokenVesting(tokenVesting);
     }
 
-    function beneficiaries() public view returns(address[] memory) {
-        return _beneficiaries;
+    function beneficiaries(VestingType vestingType) public view returns(address[] memory) {
+        uint256 j = 0;
+        address[] memory beneficiaries = new address[](_beneficiaries.length);
+        
+        for (uint256 i = 0; i < _beneficiaries.length; i++) {
+            address beneficiary = _beneficiaries[i];
+            if ( _beneficiaryIndex[beneficiary].vestingType == vestingType || vestingType == VestingType.All ) {
+                beneficiaries[j] = beneficiary;
+                j++;
+            }
+        }
+        return beneficiaries;
     }
     
     function vestingType(address beneficiary) public view returns(uint8) {
