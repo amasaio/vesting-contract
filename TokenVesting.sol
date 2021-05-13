@@ -6,6 +6,7 @@ import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contr
 import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/token/ERC20/IERC20.sol";
 import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/access/Ownable.sol";
 import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/utils/math/SafeMath.sol";
+import "./BokkyPooBahsDateTimeLibrary.sol";
 
 
 contract TokenVestingFactory is Ownable {
@@ -23,13 +24,13 @@ contract TokenVestingFactory is Ownable {
     mapping(address => BeneficiaryIndex) private _beneficiaryIndex;
     address[] private _beneficiaries;
     address private _tokenAddr;
-    uint256 private _interval;
+    // uint256 private _interval;
     uint256 private _duration;
     uint256 private _decimal;
     
-    constructor (address tokenAddr, uint256 duration, uint256 interval, uint256 decimal) {
+    constructor (address tokenAddr, uint256 duration, uint256 decimal) {
       _tokenAddr = tokenAddr;
-      _interval = interval * 24 * 60 * 60;
+    //   _interval = interval * 24 * 60 * 60;
       _duration = duration * 24 * 60 * 60;
       _decimal = decimal;
     }    
@@ -37,7 +38,7 @@ contract TokenVestingFactory is Ownable {
     function create(address beneficiary, uint256 start, uint256 cliff, uint256 initialShare, uint256 periodicShare, bool revocable, VestingType vestingType) onlyOwner public {
         require(!_beneficiaryIndex[beneficiary].isExist, "TokenVestingFactory: benficiery exists");
         
-        address tokenVesting = address(new TokenVesting(_tokenAddr, beneficiary, start, cliff, _duration, _interval, initialShare, periodicShare, _decimal, revocable));
+        address tokenVesting = address(new TokenVesting(_tokenAddr, beneficiary, start, cliff, _duration, initialShare, periodicShare, _decimal, revocable));
         TokenVesting(tokenVesting).transferOwnership(msg.sender);
         
         _beneficiaries.push(beneficiary);
@@ -96,7 +97,7 @@ contract TokenVesting is Ownable {
   uint256 private _start;
   uint256 private _end;
   uint256 private _duration;
-  uint256 private _interval;
+//   uint256 private _interval;
   address private _tokenAddr;
   uint256 private _initialShare;
   uint256 private _periodicShare;
@@ -122,7 +123,7 @@ contract TokenVesting is Ownable {
     uint256 start,
     uint256 cliff,
     uint256 duration,
-    uint256 interval,
+    // uint256 interval,
     uint256 initialShare,
     uint256 periodicShare,
     uint256 decimal,
@@ -141,7 +142,7 @@ contract TokenVesting is Ownable {
     _cliff = start.add(cliff);
     _start = start;
     _end = start.add(duration);
-    _interval = interval;
+    // _interval = interval;
     _duration = duration;
     _initialShare = initialShare;
     _periodicShare = periodicShare;
@@ -319,20 +320,22 @@ contract TokenVesting is Ownable {
   function _vestedAmount() private view returns (uint256) {
     uint256 currentBalance = IERC20(_tokenAddr).balanceOf(address(this));
     uint256 totalBalance = currentBalance.add(_released);
-    uint256 cliffBalance = totalBalance.mul(_initialShare).div(10**_decimal).div(100);
+    uint256 initialRelease = totalBalance.mul(_initialShare).div(10**_decimal).div(100);
 
     if (block.timestamp < _start) {
       return 0;
     } else if (block.timestamp < _cliff) {
-      return cliffBalance;
+      return initialRelease;
     } else {
-        uint256 intervalBalance = totalBalance.mul(_periodicShare).div(10**_decimal).div(100);
-        uint256 intervalNumbers = (block.timestamp.sub(_cliff)).div(_interval);
+        uint256 monthlyRelease = totalBalance.mul(_periodicShare).div(10**_decimal).div(100);
+        uint256 _months = BokkyPooBahsDateTimeLibrary.diffMonths(_cliff, block.timestamp);
+
+        // uint256 intervalNumbers = (block.timestamp.sub(_cliff)).div(_interval);
         
-        if (block.timestamp >= _end || _status == Status.Revoked || cliffBalance.add(intervalBalance.mul(intervalNumbers)) >= totalBalance) {
+        if (block.timestamp >= _end || _status == Status.Revoked || initialRelease.add(monthlyRelease.mul(_months + 1)) >= totalBalance) {
             return totalBalance;
         } else {
-            return cliffBalance.add(intervalBalance.mul(intervalNumbers));
+            return initialRelease.add(monthlyRelease.mul(_months + 1));
         }
     } 
   }
