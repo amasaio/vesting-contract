@@ -4,10 +4,71 @@ pragma solidity ^0.8.0;
 
 import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/token/ERC20/utils/SafeERC20.sol";
 import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/token/ERC20/IERC20.sol";
-import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/access/Ownable.sol";
 import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/utils/math/SafeMath.sol";
 import "./BokkyPooBahsDateTimeLibrary.sol";
 
+/**
+ * @title Ownable
+ * @dev The Ownable contract has an owner address, and provides basic authorization control
+ * functions, this simplifies the implementation of "user permissions".
+ */
+contract Ownable {
+    address private _owner;
+    address private _pendingOwner;
+
+    event OwnershipTransferred(
+        address indexed previousOwner,
+        address indexed newOwner
+    );
+
+    /**
+     * @dev The Ownable constructor sets the original `owner` of the contract to the sender
+     * account.
+     */
+    constructor() public {
+        _owner = msg.sender;
+    }
+
+    /**
+     * @dev Throws if called by any account other than the owner.
+     */
+    modifier onlyOwner() {
+        require(msg.sender == _owner, "onlyOwner");
+        _;
+    }
+    
+    /**
+    * @dev Returns the address of the current owner.
+    */
+    function owner() public view returns (address) {
+        return _owner;
+    }
+    
+    /**
+    * @dev Returns the address of the pending owner.
+    */
+    function pendingOwner() public view returns (address) {
+        return _pendingOwner;
+    }
+
+    /**
+     * @dev Allows the current owner to set the pendingOwner address.
+     * @param newOwner The address to transfer ownership to.
+     */
+    function transferOwnership(address newOwner) public onlyOwner {
+        _pendingOwner = newOwner;
+    }
+
+    /**
+     * @dev Allows the pendingOwner address to finalize the transfer.
+     */
+    function claimOwnership() public {
+        require(msg.sender == _pendingOwner, "onlyPendingOwner");
+        emit OwnershipTransferred(_owner, _pendingOwner);
+        _owner = _pendingOwner;
+        _pendingOwner = address(0);
+    }
+}
 
 contract TokenVestingFactory is Ownable {
 
@@ -35,8 +96,7 @@ contract TokenVestingFactory is Ownable {
         require(!_beneficiaryIndex[beneficiary].isExist, "TokenVestingFactory: benficiery exists");
         
         address tokenVesting = address(new TokenVesting(_tokenAddr, beneficiary, start, cliff, initialShare, periodicShare, _decimal, revocable));
-        TokenVesting(tokenVesting).transferOwnership(msg.sender);
-        
+
         _beneficiaries.push(beneficiary);
         _beneficiaryIndex[beneficiary].tokenVesting = tokenVesting;
         _beneficiaryIndex[beneficiary].vestingType = vestingType;
@@ -44,8 +104,20 @@ contract TokenVestingFactory is Ownable {
         
         emit CreateTokenVesting(tokenVesting);
     }
+    
+    function initialize(address tokenVesting, address from, uint256 amount) public onlyOwner {
+        TokenVesting(tokenVesting).initialize(from, amount);
+    }
+  
+    function update(address tokenVesting, uint256 start, uint256 cliff, uint256 initialShare, uint256 periodicShare, bool revocable) public onlyOwner {
+        TokenVesting(tokenVesting).update(start, cliff, initialShare, periodicShare, revocable);
+    }
+    
+    function revoke(address tokenVesting) public onlyOwner {
+        TokenVesting(tokenVesting).revoke();
+    }
 
-    function beneficiaries(VestingType vestingType) public view returns(address[] memory) {
+    function getBeneficiaries(VestingType vestingType) public view returns(address[] memory) {
         uint256 j = 0;
         address[] memory beneficiaries = new address[](_beneficiaries.length);
         
@@ -59,19 +131,20 @@ contract TokenVestingFactory is Ownable {
         return beneficiaries;
     }
     
-    function vestingType(address beneficiary) public view returns(uint8) {
+    function getVestingType(address beneficiary) public view returns(uint8) {
         require(_beneficiaryIndex[beneficiary].isExist, "TokenVestingFactory: benficiery does not exist");
         return uint8(_beneficiaryIndex[beneficiary].vestingType);
     }
 
-    function tokenVesting(address beneficiary) public view returns(address) {
+    function getTokenVesting(address beneficiary) public view returns(address) {
         require(_beneficiaryIndex[beneficiary].isExist, "TokenVestingFactory: benficiery does not exist");
         return _beneficiaryIndex[beneficiary].tokenVesting;
     }
 
-    function decimal() public view returns(uint256) {
+    function getDecimal() public view returns(uint256) {
       return _decimal;
     }
+    
 }
 
 /**
@@ -142,63 +215,63 @@ contract TokenVesting is Ownable {
   /**
    * @return the beneficiary of the tokens.
    */
-  function beneficiary() public view returns(address) {
+  function getBeneficiary() public view returns(address) {
     return _beneficiary;
   }
 
   /**
    * @return the start time of the token vesting.
    */
-  function start() public view returns(uint256) {
+  function getStart() public view returns(uint256) {
     return _start;
   }
 
   /**
    * @return the cliff time of the token vesting.
    */
-  function cliff() public view returns(uint256) {
+  function getCliff() public view returns(uint256) {
     return _cliff;
   }
 
   /**
    * @return the total amount of the token.
    */
-  function total() public view returns(uint256) {
+  function getTotal() public view returns(uint256) {
     return IERC20(_tokenAddr).balanceOf(address(this)).add(_released);
   }
 
   /**
    * @return the amount of the vested token.
    */
-  function vested() public view returns(uint256) {
+  function getVested() public view returns(uint256) {
     return _vestedAmount();
   }
 
   /**
    * @return the amount of the token released.
    */
-  function released() public view returns(uint256) {
+  function getReleased() public view returns(uint256) {
     return _released;
   }
 
   /**
    * @return the amount that has already vested but hasn't been released yet.
    */
-  function releasable() public view returns(uint256) {
+  function getReleasable() public view returns(uint256) {
     return _vestedAmount().sub(_released);
   }
 
   /**
    * @return true if the vesting is revocable.
    */
-  function revocable() public view returns(bool) {
+  function isRevocable() public view returns(bool) {
     return _revocable;
   }
   
   /**
    * @return true if the token is revoked.
    */
-  function revoked() public view returns(bool) {
+  function isRevoked() public view returns(bool) {
     if (_status == Status.Revoked) {
       return true;
     } else {
@@ -209,7 +282,7 @@ contract TokenVesting is Ownable {
    /**
    * @return status.
    */
-  function status() public view returns(uint256) {
+  function getStatus() public view returns(uint256) {
     return uint256(_status);
   }
 
@@ -220,8 +293,8 @@ contract TokenVesting is Ownable {
 
     require(_status == Status.NoInitialized, "TokenVesting: status must be NoInitialized");
 
-      IERC20(_tokenAddr).safeTransferFrom(from, address(this), amount);
       _status = Status.Initialized;
+      IERC20(_tokenAddr).safeTransferFrom(from, address(this), amount);
       emit TokenVestingInitialized(address(this), block.timestamp);
     
   }
@@ -253,7 +326,7 @@ contract TokenVesting is Ownable {
    */
   function release() public {
     require(_status != Status.NoInitialized, "TokenVesting: status is NoInitialized");
-    uint256 unreleased = releasable();
+    uint256 unreleased = getReleasable();
 
     require(unreleased > 0, "TokenVesting: releasable amount is zero");
 
@@ -274,7 +347,7 @@ contract TokenVesting is Ownable {
 
     uint256 balance = IERC20(_tokenAddr).balanceOf(address(this));
 
-    uint256 unreleased = releasable();
+    uint256 unreleased = getReleasable();
     uint256 refund = balance.sub(unreleased);
 
     _status = Status.Revoked;
