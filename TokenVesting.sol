@@ -24,21 +24,17 @@ contract TokenVestingFactory is Ownable {
     mapping(address => BeneficiaryIndex) private _beneficiaryIndex;
     address[] private _beneficiaries;
     address private _tokenAddr;
-    // uint256 private _interval;
-    uint256 private _duration;
     uint256 private _decimal;
     
-    constructor (address tokenAddr, uint256 duration, uint256 decimal) {
+    constructor (address tokenAddr, uint256 decimal) {
       _tokenAddr = tokenAddr;
-    //   _interval = interval * 24 * 60 * 60;
-      _duration = duration * 24 * 60 * 60;
       _decimal = decimal;
     }    
     
     function create(address beneficiary, uint256 start, uint256 cliff, uint256 initialShare, uint256 periodicShare, bool revocable, VestingType vestingType) onlyOwner public {
         require(!_beneficiaryIndex[beneficiary].isExist, "TokenVestingFactory: benficiery exists");
         
-        address tokenVesting = address(new TokenVesting(_tokenAddr, beneficiary, start, cliff, _duration, initialShare, periodicShare, _decimal, revocable));
+        address tokenVesting = address(new TokenVesting(_tokenAddr, beneficiary, start, cliff, initialShare, periodicShare, _decimal, revocable));
         TokenVesting(tokenVesting).transferOwnership(msg.sender);
         
         _beneficiaries.push(beneficiary);
@@ -72,12 +68,16 @@ contract TokenVestingFactory is Ownable {
         require(_beneficiaryIndex[beneficiary].isExist, "TokenVestingFactory: benficiery does not exist");
         return _beneficiaryIndex[beneficiary].tokenVesting;
     }
+
+    function decimal() public view returns(uint256) {
+      return _decimal;
+    }
 }
 
 /**
  * @title TokenVesting
  * @dev A token holder contract that can release its token balance gradually like a
- * typical vesting scheme, with a cliff and vesting period. Optionally revocable by the
+ * typical vesting scheme, with a cliff. Optionally revocable by the
  * owner.
  */
 contract TokenVesting is Ownable {
@@ -95,9 +95,6 @@ contract TokenVesting is Ownable {
 
   uint256 private _cliff;
   uint256 private _start;
-  uint256 private _end;
-  uint256 private _duration;
-//   uint256 private _interval;
   address private _tokenAddr;
   uint256 private _initialShare;
   uint256 private _periodicShare;
@@ -109,12 +106,11 @@ contract TokenVesting is Ownable {
 
   /**
    * @dev Creates a vesting contract that vests its balance of any ERC20 token to the
-   * beneficiary, gradually in a linear fashion until start + duration. By then all
+   * beneficiary, gradually in a linear fashion. By then all
    * of the balance will have vested.
    * @param beneficiary address of the beneficiary to whom vested tokens are transferred
    * @param cliff duration in seconds of the cliff in which tokens will begin to vest
    * @param start the time (as Unix time) at which point vesting starts
-   * @param duration duration in seconds of the period in which the tokens will vest
    * @param revocable whether the vesting is revocable or not
    */
   constructor(
@@ -122,8 +118,6 @@ contract TokenVesting is Ownable {
     address beneficiary,
     uint256 start,
     uint256 cliff,
-    uint256 duration,
-    // uint256 interval,
     uint256 initialShare,
     uint256 periodicShare,
     uint256 decimal,
@@ -132,18 +126,12 @@ contract TokenVesting is Ownable {
     
   {
     require(beneficiary != address(0), "TokenVesting: beneficiary address must not be zero");
-    require(cliff <= duration, "TokenVesting: cliff must be less than duration");
-    require(duration > 0, "TokenVesting: duration must be greater than zero");
-    require(start.add(duration) > block.timestamp, "TokenVesting: end time must be greater than now");
     
     _tokenAddr = tokenAddr;
     _beneficiary = beneficiary;
     _revocable = revocable;
     _cliff = start.add(cliff);
     _start = start;
-    _end = start.add(duration);
-    // _interval = interval;
-    _duration = duration;
     _initialShare = initialShare;
     _periodicShare = periodicShare;
     _decimal = decimal;
@@ -170,20 +158,6 @@ contract TokenVesting is Ownable {
    */
   function cliff() public view returns(uint256) {
     return _cliff;
-  }
-
-  /**
-   * @return the end time of the token vesting.
-   */
-  function end() public view returns(uint256) {
-    return _end;
-  }
-
-  /**
-   * @return the duration of the token vesting.
-   */
-  function duration() public view returns(uint256) {
-    return _duration;
   }
 
   /**
@@ -265,12 +239,9 @@ contract TokenVesting is Ownable {
   ) public onlyOwner {
 
     require(_status == Status.NoInitialized, "TokenVesting: status must be NoInitialized");
-    require(cliff <= _duration, "TokenVesting: cliff must be less than duration");
-    require(start.add(_duration) > block.timestamp, "TokenVesting: end time must be greater than time.now()");
     
     _start = start;
     _cliff = start.add(cliff);
-    _end = start.add(_duration);
     _initialShare = initialShare;
     _periodicShare = periodicShare;
     _revocable = revocable;
@@ -329,10 +300,8 @@ contract TokenVesting is Ownable {
     } else {
         uint256 monthlyRelease = totalBalance.mul(_periodicShare).div(10**_decimal).div(100);
         uint256 _months = BokkyPooBahsDateTimeLibrary.diffMonths(_cliff, block.timestamp);
-
-        // uint256 intervalNumbers = (block.timestamp.sub(_cliff)).div(_interval);
         
-        if (block.timestamp >= _end || _status == Status.Revoked || initialRelease.add(monthlyRelease.mul(_months + 1)) >= totalBalance) {
+        if (_status == Status.Revoked || initialRelease.add(monthlyRelease.mul(_months + 1)) >= totalBalance) {
             return totalBalance;
         } else {
             return initialRelease.add(monthlyRelease.mul(_months + 1));
