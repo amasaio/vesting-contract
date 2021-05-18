@@ -74,11 +74,11 @@ contract TokenVestingFactory is Ownable {
 
     event CreateTokenVesting(address tokenVesting);
 
-    enum VestingType { SeedInvestors, StrategicInvestors, Advisors, Team, All }
+    // enum VestingType { SeedInvestors, StrategicInvestors, Advisors, Team, All }
 
     struct BeneficiaryIndex {
         address tokenVesting;
-        VestingType vestingType;
+        uint256 vestingType;
         bool isExist;
         // uint256 index;
     }
@@ -92,8 +92,9 @@ contract TokenVestingFactory is Ownable {
       _decimal = decimal;
     }    
     
-    function create(address beneficiary, uint256 start, uint256 cliff, uint256 initialShare, uint256 periodicShare, bool revocable, VestingType vestingType) onlyOwner public {
+    function create(address beneficiary, uint256 start, uint256 cliff, uint256 initialShare, uint256 periodicShare, bool revocable, uint256 vestingType) onlyOwner public {
         require(!_beneficiaryIndex[beneficiary].isExist, "TokenVestingFactory: benficiery exists");
+        require(vestingType != 0, "TokenVestingFactory: vestingType 0 is reserved");
         
         address tokenVesting = address(new TokenVesting(_tokenAddr, beneficiary, start, cliff, initialShare, periodicShare, _decimal, revocable));
 
@@ -117,13 +118,13 @@ contract TokenVestingFactory is Ownable {
         TokenVesting(tokenVesting).revoke();
     }
 
-    function getBeneficiaries(VestingType vestingType) public view returns(address[] memory) {
+    function getBeneficiaries(uint256 vestingType) public view returns(address[] memory) {
         uint256 j = 0;
         address[] memory beneficiaries = new address[](_beneficiaries.length);
         
         for (uint256 i = 0; i < _beneficiaries.length; i++) {
             address beneficiary = _beneficiaries[i];
-            if ( _beneficiaryIndex[beneficiary].vestingType == vestingType || vestingType == VestingType.All ) {
+            if ( _beneficiaryIndex[beneficiary].vestingType == vestingType || vestingType == 0 ) {
                 beneficiaries[j] = beneficiary;
                 j++;
             }
@@ -139,6 +140,10 @@ contract TokenVestingFactory is Ownable {
     function getTokenVesting(address beneficiary) public view returns(address) {
         require(_beneficiaryIndex[beneficiary].isExist, "TokenVestingFactory: benficiery does not exist");
         return _beneficiaryIndex[beneficiary].tokenVesting;
+    }
+    
+    function getTokenAddress() public view returns(address) {
+        return _tokenAddr;
     }
 
     function getDecimal() public view returns(uint256) {
