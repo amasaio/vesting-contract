@@ -220,11 +220,11 @@ contract TokenVesting is Ownable {
    /**
    * @return TokenVesting details.
    */
-  function getDetails() public view returns(address, uint256, uint256, uint256, uint256, uint256, uint256, bool) {
+  function getDetails() public view returns(address, uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256, bool) {
     uint256 _total = IERC20(_tokenAddr).balanceOf(address(this)).add(_released);
     uint256 _vested = _vestedAmount();
     uint256 _releasable = _vestedAmount().sub(_released);
-    return (_beneficiary, _start, _cliff, _total, _vested, _released, _releasable, _revocable);
+    return (_beneficiary, _initialShare, _periodicShare, _start, _cliff, _total, _vested, _released, _releasable, _revocable);
   }
 
   
