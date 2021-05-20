@@ -227,6 +227,23 @@ contract TokenVesting is Ownable {
     return (_beneficiary, _start, _cliff, _total, _vested, _released, _releasable, _revocable);
   }
 
+  
+  /**
+   * @return the initial share of the beneficiary.
+   */
+  function getInitialShare() public view returns(uint256) {
+    return _initialShare;
+  }
+  
+  
+  /**
+   * @return the periodic share of the beneficiary.
+   */
+  function getPeriodicShare() public view returns(uint256) {
+    return _periodicShare;
+  }
+  
+  
   /**
    * @return the beneficiary of the tokens.
    */
