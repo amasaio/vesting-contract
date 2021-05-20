@@ -132,9 +132,9 @@ contract TokenVestingFactory is Ownable {
         return beneficiaries;
     }
     
-    function getVestingType(address beneficiary) public view returns(uint8) {
+    function getVestingType(address beneficiary) public view returns(uint256) {
         require(_beneficiaryIndex[beneficiary].isExist, "TokenVestingFactory: benficiery does not exist");
-        return uint8(_beneficiaryIndex[beneficiary].vestingType);
+        return _beneficiaryIndex[beneficiary].vestingType;
     }
 
     function getTokenVesting(address beneficiary) public view returns(address) {
@@ -215,6 +215,16 @@ contract TokenVesting is Ownable {
     _decimal = decimal;
     _status = Status.NoInitialized;
     
+  }
+  
+   /**
+   * @return TokenVesting details.
+   */
+  function getDetails() public view returns(address, uint256, uint256, uint256, uint256, uint256, uint256, bool) {
+    uint256 _total = IERC20(_tokenAddr).balanceOf(address(this)).add(_released);
+    uint256 _vested = _vestedAmount();
+    uint256 _releasable = _vestedAmount().sub(_released);
+    return (_beneficiary, _start, _cliff, _total, _vested, _released, _releasable, _revocable);
   }
 
   /**
