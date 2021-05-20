@@ -16,7 +16,6 @@
 
 For quick installation of the contract `ABIs`:
 
-```
 ## Usage
 
 
