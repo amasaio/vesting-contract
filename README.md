@@ -41,11 +41,11 @@ npm i
 In the root directory of the project create a file with name ```.env```. Then paste these parameters to the file and initialize them accordingly:
 
 ```
-INFURA_TOKEN_MAINNET=<Token for connecting to the infura provider on Ethereum mainnet>
-INFURA_TOKEN_RINKEBY=<Token for connecting to the rinkeby provider on Ethereum mainnet>
+INFURA_TOKEN_MAINNET=<Token for connecting to Ethereum mainnet using infura provider>
+INFURA_TOKEN_RINKEBY=<Token for connecting to Ethereum rinkeby using infura provider>
 MNEMONIC=<Contract owner's mnemonic backup phrase>
 VESTING_DECIMAL=<Precision of the numbers. 18 is recommended>
-TOKEN_ADDRESS=<Your token address>
+TOKEN_ADDRESS=<Amasa token address>
 OWNER_ADDRESS=<Owner wallet address>
 ETHERSCAN_API_KEY=<The Etherscan API Key which is used for publishing the source code on the Etherscan>
 ```
