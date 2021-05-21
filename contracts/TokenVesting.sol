@@ -73,7 +73,7 @@ contract Ownable {
 
 contract TokenVestingFactory is Ownable {
 
-    event CreateTokenVesting(address tokenVesting);
+    event TokenVestingCreated(address tokenVesting);
 
     // enum VestingType { SeedInvestors, StrategicInvestors, Advisors, Team, All }
 
@@ -89,6 +89,8 @@ contract TokenVestingFactory is Ownable {
     uint256 private _decimal;
     
     constructor (address tokenAddr, uint256 decimal) {
+      require(tokenAddr != address(0), "TokenVestingFactory: token address must not be zero");
+
       _tokenAddr = tokenAddr;
       _decimal = decimal;
     }    
@@ -104,7 +106,7 @@ contract TokenVestingFactory is Ownable {
         _beneficiaryIndex[beneficiary].vestingType = vestingType;
         _beneficiaryIndex[beneficiary].isExist = true;
         
-        emit CreateTokenVesting(tokenVesting);
+        emit TokenVestingCreated(tokenVesting);
     }
     
     function initialize(address tokenVesting, address from, uint256 amount) public onlyOwner {
@@ -116,7 +118,7 @@ contract TokenVestingFactory is Ownable {
     }
     
     function revoke(address tokenVesting) public onlyOwner {
-        TokenVesting(tokenVesting).revoke();
+        TokenVesting(tokenVesting).revoke(owner());
     }
 
     function getBeneficiaries(uint256 vestingType) public view returns(address[] memory) {
@@ -163,11 +165,11 @@ contract TokenVesting is Ownable {
   using SafeMath for uint256;
   using SafeERC20 for IERC20;
 
-  event TokensReleased(address contractAddr, uint256 amount);
-  event TokenVestingRevoked(address contractAddr, uint256 amount);
-  event TokenVestingInitialized(address contractAddr, uint256 tm);
+  event TokensReleased(address beneficiary, uint256 amount);
+  event TokenVestingRevoked(address refundAddress, uint256 amount);
+  event TokenVestingInitialized(address from, uint256 amount);
 
-  enum Status { NoInitialized, Initialized, Revoked }
+  enum Status { NotInitialized, Initialized, Revoked }
 
   // beneficiary of tokens after they are released
   address private _beneficiary;
@@ -214,18 +216,18 @@ contract TokenVesting is Ownable {
     _initialShare = initialShare;
     _periodicShare = periodicShare;
     _decimal = decimal;
-    _status = Status.NoInitialized;
+    _status = Status.NotInitialized;
     
   }
   
    /**
    * @return TokenVesting details.
    */
-  function getDetails() public view returns(address, uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256, bool) {
+  function getDetails() public view returns(address, uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256, bool, uint256) {
     uint256 _total = IERC20(_tokenAddr).balanceOf(address(this)).add(_released);
     uint256 _vested = _vestedAmount();
     uint256 _releasable = _vestedAmount().sub(_released);
-    return (_beneficiary, _initialShare, _periodicShare, _start, _cliff, _total, _vested, _released, _releasable, _revocable);
+    return (_beneficiary, _initialShare, _periodicShare, _start, _cliff, _total, _vested, _released, _releasable, _revocable, uint256(_status));
   }
 
   
@@ -324,11 +326,11 @@ contract TokenVesting is Ownable {
    */
   function initialize(address from, uint256 amount) public onlyOwner {
 
-    require(_status == Status.NoInitialized, "TokenVesting: status must be NoInitialized");
+    require(_status == Status.NotInitialized, "TokenVesting: status must be NotInitialized");
 
       _status = Status.Initialized;
       IERC20(_tokenAddr).safeTransferFrom(from, address(this), amount);
-      emit TokenVestingInitialized(address(this), block.timestamp);
+      emit TokenVestingInitialized(address(from), amount);
     
   }
 
@@ -344,7 +346,7 @@ contract TokenVesting is Ownable {
 
   ) public onlyOwner {
 
-    require(_status == Status.NoInitialized, "TokenVesting: status must be NoInitialized");
+    require(_status == Status.NotInitialized, "TokenVesting: status must be NotInitialized");
     
     _start = start;
     _cliff = start.add(cliff);
@@ -358,7 +360,7 @@ contract TokenVesting is Ownable {
    * @notice Transfers vested tokens to beneficiary.
    */
   function release() public {
-    require(_status != Status.NoInitialized, "TokenVesting: status is NoInitialized");
+    require(_status != Status.NotInitialized, "TokenVesting: status is NotInitialized");
     uint256 unreleased = getReleasable();
 
     require(unreleased > 0, "TokenVesting: releasable amount is zero");
@@ -367,14 +369,14 @@ contract TokenVesting is Ownable {
 
     IERC20(_tokenAddr).safeTransfer(_beneficiary, unreleased);
 
-    emit TokensReleased(address(this), unreleased);
+    emit TokensReleased(address(_beneficiary), unreleased);
   }
 
   /**
    * @notice Allows the owner to revoke the vesting. Tokens already vested
    * remain in the contract, the rest are returned to the owner.
    */
-  function revoke() public onlyOwner {
+  function revoke(address refundAddress) public onlyOwner {
     require(_revocable, "TokenVesting: contract is not revocable");
     require(_status != Status.Revoked, "TokenVesting: status is Revoked");
 
@@ -385,9 +387,9 @@ contract TokenVesting is Ownable {
 
     _status = Status.Revoked;
 
-    IERC20(_tokenAddr).safeTransfer(owner(), refund);
+    IERC20(_tokenAddr).safeTransfer(refundAddress, refund);
 
-    emit TokenVestingRevoked(address(this), refund);
+    emit TokenVestingRevoked(address(refundAddress), refund);
   }
 
 

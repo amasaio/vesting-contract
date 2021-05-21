@@ -4,41 +4,21 @@
 
 **Table of Contents**
 
-- [Installation](#-installation)
 - [Usage](#-usage)
-- [Quickstart](#-quickstart)
+- [Installation](#-installation)
 - [Network Deployments](#-network-deployments)
-- [Local Development](#-local-development)
 - [Testing](#-testing)
 - [License](#-license)
 
-## Installation
-
-For quick installation of the contract `ABIs`:
 
 ## Usage
 
-
-## Quickstart
-
-
-## Network Deployments
-
-You can deploy the contract locally, to Rinkeby, or to Ethereum mainnet.
-
-#### Deploy Locally (Ganache)
-
-* In a separate terminal, start the testnet: `ganache-cli`
-* In your main terminal, run: `truffle migrate --network development`
-
-#### Deploy to Remote (e.g. Rinkeby)
-
-* In your main terminal, run: `truffle migrate --network Rinkeby`
+This contract is used to create vesting table for Amasa token beneficiaries.
 
 
-## Local Development
+## Installation
 
-For local development of `vesting contract`, set up the development environment on your machine as follows.
+Set up the development environment on your machine as follows.
 
 As a prerequisite, you need:
 
@@ -54,9 +34,44 @@ cd vesting-contract/
 # install packages
 npm i
 
+
+# setup environment variables
+In the root directory of the project create a file with name ```.env```. Then paste these parameters to the file and initialize them accordingly:
+
+```
+INFURA_TOKEN_MAINNET=<Token for connecting to the infura provider on Ethereum mainnet>
+INFURA_TOKEN_RINKEBY=<Token for connecting to the rinkeby provider on Ethereum mainnet>
+MNEMONIC=<Contract owner's mnemonic backup phrase>
+VESTING_DECIMAL=<Precision of the numbers. 18 is recommended>
+TOKEN_ADDRESS=<Your token address>
+OWNER_ADDRESS=<Owner wallet address>
+ETHERSCAN_API_KEY=<The Etherscan API Key which is used for publishing the source code on the Etherscan>
+```
+
 # to compile contracts
 truffle compile
 ```
+
+
+
+## Network Deployments
+
+You can deploy the contract locally, to Rinkeby, or to Ethereum mainnet.
+
+#### Deploy Locally (Ganache)
+
+* In a separate terminal, start the testnet: `ganache-cli`
+* In your main terminal, run: `truffle migrate --network development`
+
+#### Deploy to Rinkeby
+
+* In your main terminal, run: `truffle migrate --network rinkeby`
+
+
+#### Deploy to mainnet
+
+* In your main terminal, run: `truffle migrate --network mainnet`
+
 
 ## Testing
 
@@ -68,13 +83,10 @@ ganache-cli
 In main console:
 ```bash
 # for unit tests
-
-
-# for test coverage
-
+ truffle test --network development
 ```
 
-## 🏛 License
+## License
 
 ```
 Copyright 2021 Amasa
