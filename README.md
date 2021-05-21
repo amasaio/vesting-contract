@@ -30,10 +30,12 @@ Clone the project and install all dependencies:
 ```bash
 git clone https://github.com/amasaio/vesting-contract.git
 cd vesting-contract/
+```
 
 # install packages
+```
 npm i
-
+```
 
 # setup environment variables
 In the root directory of the project create a file with name ```.env```. Then paste these parameters to the file and initialize them accordingly:
