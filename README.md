@@ -11,12 +11,12 @@
 - [License](#-license)
 
 
-## Usage
+# Usage
 
 This contract is used to create vesting table for Amasa token beneficiaries.
 
 
-## Installation
+# Installation
 
 Set up the development environment on your machine as follows.
 
@@ -32,12 +32,12 @@ git clone https://github.com/amasaio/vesting-contract.git
 cd vesting-contract/
 ```
 
-# install packages
+## install packages
 ```
 npm i
 ```
 
-# setup environment variables
+## setup environment variables
 In the root directory of the project create a file with name ```.env```. Then paste these parameters to the file and initialize them accordingly:
 
 ```
@@ -50,32 +50,32 @@ OWNER_ADDRESS=<Owner wallet address>
 ETHERSCAN_API_KEY=<The Etherscan API Key which is used for publishing the source code on the Etherscan>
 ```
 
-# to compile contracts
+## to compile contracts
+```
 truffle compile
 ```
 
 
 
-## Network Deployments
+# Network Deployments
 
 You can deploy the contract locally, to Rinkeby, or to Ethereum mainnet.
 
-#### Deploy Locally (Ganache)
+## Deploy Locally (Ganache)
 
 * In a separate terminal, start the testnet: `ganache-cli`
 * In your main terminal, run: `truffle migrate --network development`
 
-#### Deploy to Rinkeby
+## Deploy to Rinkeby
 
 * In your main terminal, run: `truffle migrate --network rinkeby`
 
-
-#### Deploy to mainnet
+## Deploy to mainnet
 
 * In your main terminal, run: `truffle migrate --network mainnet`
 
 
-## Testing
+# Testing
 
 In a separate console:
 ```console
@@ -88,7 +88,7 @@ In main console:
  truffle test --network development
 ```
 
-## License
+# License
 
 ```
 Copyright 2021 Amasa
