@@ -32,6 +32,12 @@ git clone https://github.com/amasaio/vesting-contract.git
 cd vesting-contract/
 ```
 
+## install truffle
+```
+npm i -g truffle
+```
+
+
 ## install packages
 ```
 npm i
