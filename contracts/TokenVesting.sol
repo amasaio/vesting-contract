@@ -26,7 +26,7 @@ contract Ownable {
      * @dev The Ownable constructor sets the original `owner` of the contract to the sender
      * account.
      */
-    constructor() public {
+    constructor() {
         _owner = msg.sender;
     }
 
@@ -401,19 +401,22 @@ contract TokenVesting is Ownable {
     uint256 totalBalance = currentBalance.add(_released);
     uint256 initialRelease = totalBalance.mul(_initialShare).div(10**_decimal).div(100);
 
-    if (block.timestamp < _start) {
+    if (block.timestamp < _start)
       return 0;
-    } else if (block.timestamp < _cliff) {
+	
+	if (_status == Status.Revoked)
+		return totalBalance;
+		
+    if (block.timestamp < _cliff)
       return initialRelease;
-    } else {
-        uint256 monthlyRelease = totalBalance.mul(_periodicShare).div(10**_decimal).div(100);
-        uint256 _months = BokkyPooBahsDateTimeLibrary.diffMonths(_cliff, block.timestamp);
-        
-        if (_status == Status.Revoked || initialRelease.add(monthlyRelease.mul(_months + 1)) >= totalBalance) {
-            return totalBalance;
-        } else {
-            return initialRelease.add(monthlyRelease.mul(_months + 1));
-        }
-    } 
+
+	uint256 monthlyRelease = totalBalance.mul(_periodicShare).div(10**_decimal).div(100);
+	uint256 _months = BokkyPooBahsDateTimeLibrary.diffMonths(_cliff, block.timestamp);
+	
+	if (initialRelease.add(monthlyRelease.mul(_months + 1)) >= totalBalance) {
+		return totalBalance;
+	} else {
+		return initialRelease.add(monthlyRelease.mul(_months + 1));
+	}
   }
 }
