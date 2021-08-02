@@ -18,8 +18,10 @@ module.exports = {
 	
 	development: {
       host: "127.0.0.1",
-      port: 7545,
-      network_id: "*" // Match any network id
+      port: 8545,
+      gas: 10 * 1000000,
+      network_id: "*", // Match any network id
+      BlockLimit: 0xFFFFFF
     },
 	
 	rinkeby: {
