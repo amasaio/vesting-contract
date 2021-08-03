@@ -75,14 +75,6 @@ contract Ownable {
 contract TokenVestingFactory is Ownable, MultiSig {
 
 
-    /**
-     * @dev Throws if called by any account other than the owner.
-     */
-    modifier onlyMultiSig() {
-        require(msg.sender == address(this), "Only Multisig contract can run this method");
-        _;
-    }
-
     event TokenVestingCreated(address tokenVesting);
 
     // enum VestingType { SeedInvestors, StrategicInvestors, Advisors, Team, All }
