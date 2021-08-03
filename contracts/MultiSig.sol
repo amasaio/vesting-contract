@@ -301,7 +301,7 @@ contract MultiSig {
  
         for (uint256 i = 0; i < _signers.length - 1; i++) {
             if (_signers[i] == signer) {
-                _signers[i] == _signers[_signers.length - 1];
+                _signers[i] = _signers[_signers.length - 1];
                 break;
             }
         }

@@ -141,31 +141,9 @@ contract('Token Vesting Factory test', async accounts => {
 
     })
 
-    it('remove signer', async () => {
-
-        let encode = await _tokenVestingFactory.contract.methods.removeSigner(accounts[1], 1).encodeABI();
-        await _tokenVestingFactory.approveHash(
-             0, encode,
-            {
-                from: _owner
-            }
-        )
-
-        await _tokenVestingFactory.execTransaction(
-             0, encode,
-            {
-                from: _owner
-            }
-        )
-
-        let signers = await _tokenVestingFactory.getSigners();
-        assert.equal(signers.length, 1)
-
-
-    })
 
     it('Add/Remove signers', async () => {
-        let encode = await _tokenVestingFactory.contract.methods.addSigner(accounts[1], 2).encodeABI();
+        let encode = await _tokenVestingFactory.contract.methods.addSigner(accounts[1], 1).encodeABI();
         await _tokenVestingFactory.approveHash(
              0, encode,
             {
@@ -181,6 +159,23 @@ contract('Token Vesting Factory test', async accounts => {
 
         let signers = await _tokenVestingFactory.getSigners();
         assert.equal(signers.length, 2)
+
+        encode = await _tokenVestingFactory.contract.methods.addSigner(accounts[2], 1).encodeABI();
+        await _tokenVestingFactory.approveHash(
+            0, encode,
+            {
+                from: _owner
+            }
+        )
+        await _tokenVestingFactory.execTransaction(
+            0, encode,
+            {
+                from: _owner
+            }
+        )
+
+        signers = await _tokenVestingFactory.getSigners();
+        assert.equal(signers.length, 3)
 ////////////////////////////////////////////
         encode = await _tokenVestingFactory.contract.methods.removeSigner(accounts[1], 1).encodeABI();
         await _tokenVestingFactory.approveHash(
@@ -190,16 +185,6 @@ contract('Token Vesting Factory test', async accounts => {
             }
         )
 
-        signers = await _tokenVestingFactory.getSigners();
-        assert.equal(signers.length, 2)
-
-        await _tokenVestingFactory.approveHash(
-             0, encode,
-            {
-                from: accounts[1]
-            }
-        )
-
         await _tokenVestingFactory.execTransaction(
              0, encode,
             {
@@ -208,7 +193,10 @@ contract('Token Vesting Factory test', async accounts => {
         )
 
         signers = await _tokenVestingFactory.getSigners();
-        assert.equal(signers.length, 1)
+        assert.equal(signers.length, 2);
+        assert.equal(await _tokenVestingFactory.existSigner(accounts[1]), false);
+        assert.equal(await _tokenVestingFactory.existSigner(accounts[2]), true);
+
 
     })
 
@@ -333,7 +321,7 @@ contract('Token Vesting Factory test', async accounts => {
                 from: _owner
             }
         )
-        assert.equal(await _tokenVesting.isRevoked(), true)
+        assert.equal(await _tokenVesting.isRevoked(), true);
 
     })
 })
