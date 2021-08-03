@@ -9,6 +9,6 @@ const AmasaToken = artifacts.require("AmasaToken");
 
 module.exports = function (deployer, network, accounts) {
 	deployer.deploy(tokenVestingFactory, process.env.TOKEN_ADDRESS, process.env.VESTING_DECIMAL, [accounts[0]], 1);
-	// deployer.deploy(multisig, [accounts[0]], 1);
+	//deployer.deploy(multisig);
 	// deployer.deploy(AmasaToken);
 };

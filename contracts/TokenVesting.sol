@@ -5,6 +5,8 @@ pragma solidity ^0.8.0;
 
 
 import "./MultiSig.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./BokkyPooBahsDateTimeLibrary.sol";
 
 /**
@@ -97,11 +99,12 @@ contract TokenVestingFactory is Ownable, MultiSig {
     address private _tokenAddr;
     uint256 private _decimal;
 
-    constructor (address tokenAddr, uint256 decimal, address[] memory _owners, uint256 _threshold) MultiSig(_owners, _threshold){
+    constructor (address tokenAddr, uint256 decimal, address[] memory owners, uint256 threshold) {
         require(tokenAddr != address(0), "TokenVestingFactory: token address must not be zero");
 
         _tokenAddr = tokenAddr;
         _decimal = decimal;
+        setupMultiSig(owners, threshold);
     }
 
     function create(address beneficiary, uint256 start, uint256 cliff, uint256 initialShare, uint256 periodicShare, bool revocable, uint256 vestingType) onlyOwner public {
@@ -171,10 +174,10 @@ contract TokenVestingFactory is Ownable, MultiSig {
  * typical vesting scheme, with a cliff. Optionally revocable by the
  * owner.
  */
-contract TokenVesting is Ownable {
-    using SafeMath for uint256;
+contract TokenVesting is Ownable {    
     using SafeERC20 for IERC20;
 
+    event TokenVestingUpdated(uint256 start, uint256 cliff, uint256 initialShare, uint256 periodicShare, bool revocable);
     event TokensReleased(address beneficiary, uint256 amount);
     event TokenVestingRevoked(address refundAddress, uint256 amount);
     event TokenVestingInitialized(address from, uint256 amount);
@@ -221,7 +224,7 @@ contract TokenVesting is Ownable {
         _tokenAddr = tokenAddr;
         _beneficiary = beneficiary;
         _revocable = revocable;
-        _cliff = start.add(cliff);
+        _cliff = start + cliff;
         _start = start;
         _initialShare = initialShare;
         _periodicShare = periodicShare;
@@ -234,9 +237,9 @@ contract TokenVesting is Ownable {
     * @return TokenVesting details.
     */
     function getDetails() public view returns (address, uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256, bool, uint256) {
-        uint256 _total = IERC20(_tokenAddr).balanceOf(address(this)).add(_released);
+        uint256 _total = IERC20(_tokenAddr).balanceOf(address(this)) + _released;
         uint256 _vested = _vestedAmount();
-        uint256 _releasable = _vestedAmount().sub(_released);
+        uint256 _releasable = _vestedAmount() - _released;
         return (_beneficiary, _initialShare, _periodicShare, _start, _cliff, _total, _vested, _released, _releasable, _revocable, uint256(_status));
     }
 
@@ -282,7 +285,7 @@ contract TokenVesting is Ownable {
      * @return the total amount of the token.
      */
     function getTotal() public view returns (uint256) {
-        return IERC20(_tokenAddr).balanceOf(address(this)).add(_released);
+        return IERC20(_tokenAddr).balanceOf(address(this)) + _released;
     }
 
     /**
@@ -303,7 +306,7 @@ contract TokenVesting is Ownable {
      * @return the amount that has already vested but hasn't been released yet.
      */
     function getReleasable() public view returns (uint256) {
-        return _vestedAmount().sub(_released);
+        return _vestedAmount() - _released;
     }
 
     /**
@@ -339,8 +342,10 @@ contract TokenVesting is Ownable {
         require(_status == Status.NotInitialized, "TokenVesting: status must be NotInitialized");
 
         _status = Status.Initialized;
-        IERC20(_tokenAddr).safeTransferFrom(from, address(this), amount);
+
         emit TokenVestingInitialized(address(from), amount);
+
+        IERC20(_tokenAddr).safeTransferFrom(from, address(this), amount);
 
     }
 
@@ -359,10 +364,12 @@ contract TokenVesting is Ownable {
         require(_status == Status.NotInitialized, "TokenVesting: status must be NotInitialized");
 
         _start = start;
-        _cliff = start.add(cliff);
+        _cliff = start + cliff;
         _initialShare = initialShare;
         _periodicShare = periodicShare;
         _revocable = revocable;
+
+        emit TokenVestingUpdated(_start, _cliff, _initialShare, _periodicShare, _revocable);
 
     }
 
@@ -375,11 +382,11 @@ contract TokenVesting is Ownable {
 
         require(unreleased > 0, "TokenVesting: releasable amount is zero");
 
-        _released = _released.add(unreleased);
-
-        IERC20(_tokenAddr).safeTransfer(_beneficiary, unreleased);
+        _released = _released + unreleased;
 
         emit TokensReleased(address(_beneficiary), unreleased);
+
+        IERC20(_tokenAddr).safeTransfer(_beneficiary, unreleased);
     }
 
     /**
@@ -393,13 +400,14 @@ contract TokenVesting is Ownable {
         uint256 balance = IERC20(_tokenAddr).balanceOf(address(this));
 
         uint256 unreleased = getReleasable();
-        uint256 refund = balance.sub(unreleased);
+        uint256 refund = balance - unreleased;
 
         _status = Status.Revoked;
 
+        emit TokenVestingRevoked(address(refundAddress), refund);
+        
         IERC20(_tokenAddr).safeTransfer(refundAddress, refund);
 
-        emit TokenVestingRevoked(address(refundAddress), refund);
     }
 
 
@@ -408,8 +416,8 @@ contract TokenVesting is Ownable {
      */
     function _vestedAmount() private view returns (uint256) {
         uint256 currentBalance = IERC20(_tokenAddr).balanceOf(address(this));
-        uint256 totalBalance = currentBalance.add(_released);
-        uint256 initialRelease = totalBalance.mul(_initialShare).div(10 ** _decimal).div(100);
+        uint256 totalBalance = currentBalance + _released;
+        uint256 initialRelease = (totalBalance * _initialShare) / ((10 ** _decimal) * 100) ;
 
         if (block.timestamp < _start)
             return 0;
@@ -420,13 +428,13 @@ contract TokenVesting is Ownable {
         if (block.timestamp < _cliff)
             return initialRelease;
 
-        uint256 monthlyRelease = totalBalance.mul(_periodicShare).div(10 ** _decimal).div(100);
+        uint256 monthlyRelease = (totalBalance * _periodicShare) / ((10 ** _decimal) * 100);
         uint256 _months = BokkyPooBahsDateTimeLibrary.diffMonths(_cliff, block.timestamp);
 
-        if (initialRelease.add(monthlyRelease.mul(_months + 1)) >= totalBalance) {
+        if (initialRelease + (monthlyRelease * (_months + 1)) >= totalBalance) {
             return totalBalance;
         } else {
-            return initialRelease.add(monthlyRelease.mul(_months + 1));
+            return initialRelease + (monthlyRelease * (_months + 1));
         }
     }
 }

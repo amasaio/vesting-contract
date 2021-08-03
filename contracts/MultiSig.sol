@@ -2,14 +2,9 @@
 
 pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/utils/math/SafeMath.sol";
-
 
 
 contract MultiSig {
-    string public constant VERSION = "1.3.0";
 
     event setupEvent(address[] signers, uint256 threshold);
     event ApproveHash(bytes32 indexed approvedHash, address indexed owner);
@@ -29,23 +24,28 @@ contract MultiSig {
     uint256 internal _threshold;
     uint256 public _nonce;
 
-    constructor (address[] memory signers, uint256 threshold) {
 
-        require(threshold <= signers.length, "MultiSig: Can not set neededSigners count bigger than signers length!");
-        require(threshold >= 1, "MultiSig: Can not set neededSigners count lower than 1!");
+    constructor () {
+
+    }
+
+    function setupMultiSig(address[] memory signers, uint256 threshold) internal {
+        require(threshold <= signers.length, "MS01");
+        require(threshold >= 1, "MS02");
 
         for (uint256 i = 0; i < signers.length; i++) {
             address signer = signers[i];
-            require(!existSigner(signer), "MultiSig: signer exists");
-            require(signer != address(0), "MultiSig: signer you want to add is ZERO_ADDRESS");
-            require(signer != address(this), "MultiSig: Sender can not be own contract");
+            require(!existSigner(signer), "MS03");
+            require(signer != address(0), "MS04");
+            require(signer != address(this), "MS05");
 
             _signers.push(signer);
         }
 
         _threshold = threshold;
-        emit setupEvent(signers, threshold);
+        emit setupEvent(_signers, _threshold);
     }
+
 
     /// @dev Allows to execute a Safe transaction confirmed by required number of owners and then pays the account that submitted the transaction.
     ///      Note: The fees are always transferred, even if the user transaction fails.
@@ -108,10 +108,10 @@ contract MultiSig {
         // Load threshold to avoid multiple storage loads
         uint256 threshold = _threshold;
         // Check that a threshold is set
-        require(threshold > 0, "Not enough signers is defined");
+        require(threshold >= 1, "MS02");
         address[] memory alreadySigned = getSignersOfHash(dataHash);
 
-        require(alreadySigned.length >= threshold, "signed count are not enough! needs ");
+        require(alreadySigned.length >= threshold, "MS06");
         // + threshold + " but got " + alreadySigned.length);
     }
 
@@ -143,7 +143,7 @@ contract MultiSig {
     function approveHash(address to,
         uint256 value,
         bytes calldata data) public {
-        require(existSigner(msg.sender), "You are not one of the signers");
+        require(existSigner(msg.sender), "MS07");
         bytes32 hashToApprove = getTransactionHash(to, value, data, _nonce);
 
         approvedHashes[msg.sender][hashToApprove] = 1;
@@ -207,29 +207,29 @@ contract MultiSig {
     }
 
     function setThreshold(uint256 threshold) public {
-        require(msg.sender == address(this), "MultiSig: Sender should only be own contract");
-        require(threshold <= _signers.length, "MultiSig: Can not set neededSigners count bigger than signers length!");
-        require(_threshold >= 1, "MultiSig: Can not set neededSigners count lower than 1!");
+        require(msg.sender == address(this), "MS08");
+        require(threshold <= _signers.length, "MS01");
+        require(_threshold >= 1, "MS02!");
         _threshold = threshold;
         emit thresholdEvent(threshold);
     }
 
     function addSigner(address signer, uint256 threshold) public {
-        require(msg.sender == address(this), "MultiSig: Sender should only be own contract");
-        require(!existSigner(signer), "MultiSig: signer exists");
-        require(signer != address(0), "MultiSig: signer you want to add is ZERO_ADDRESS");
-        require(signer != address(this), "MultiSig: Sender can not be own contract");
+        require(msg.sender == address(this), "MS08");
+        require(!existSigner(signer), "MS03");
+        require(signer != address(0), "MS04");
+        require(signer != address(this), "MS05");
         _signers.push(signer);
         emit signerAddEvent(signer);
         setThreshold(threshold);
     }
 
     function removeSigner(address signer, uint256 threshold) public {
-        require(msg.sender == address(this), "MultiSig: Sender should only be own contract");
-        require(existSigner(signer), "MultiSig: signer is not exists");
-        require(_signers.length - 1 >= 1, "MultiSig: can not remove last signer");
-        require(_signers.length - 1 >= threshold, "MultiSig: threshold can not be greater then signers count");
-        require(signer != address(0), "MultiSig: signer you want to remove is ZERO_ADDRESS");
+        require(msg.sender == address(this), "MS08");
+        require(existSigner(signer), "MS07");
+        require(_signers.length - 1 >= 1, "MS09");
+        require(_signers.length - 1 >= threshold, "MS10");
+        require(signer != address(0), "MS04");
 
 
         uint256 i = 0;
@@ -247,11 +247,11 @@ contract MultiSig {
     }
 
     function changeSigner(address oldSigner, address newSigner) public {
-        require(msg.sender == address(this), "MultiSig: Sender should only be own contract");
-        require(existSigner(oldSigner), "MultiSig: signer is not exists");
-        require(!existSigner(newSigner), "MultiSig: signer is exists");
-        require(newSigner != address(0), "MultiSig: signer you want to add is ZERO_ADDRESS");
-        require(newSigner != address(this), "MultiSig: Sender can not be own contract");
+        require(msg.sender == address(this), "MS08");
+        require(existSigner(oldSigner), "MS07");
+        require(!existSigner(newSigner), "MS03");
+        require(newSigner != address(0), "MS04");
+        require(newSigner != address(this), "MS05");
         uint256 i = 0;
         for (; i < _signers.length; i++) {
             if (_signers[i] == oldSigner) {
