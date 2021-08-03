@@ -54,6 +54,8 @@ VESTING_DECIMAL=<Precision of the numbers. 18 is recommended>
 TOKEN_ADDRESS=<Amasa token address>
 OWNER_ADDRESS=<Owner wallet address>
 ETHERSCAN_API_KEY=<The Etherscan API Key which is used for publishing the source code on the Etherscan>
+SIGNERS=<Signers seperated with space(' ')>
+THRESHOULD=<Signs count need to execute a transaction >
 ```
 
 ## to compile contracts

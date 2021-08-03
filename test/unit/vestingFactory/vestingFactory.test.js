@@ -26,7 +26,7 @@ contract('Token Vesting Factory test', async accounts => {
             }
         )
         _tokenVestingFactory = await tokenVestingFactory.new(
-            _amasaToken.address, 18,
+            _amasaToken.address, 18,[owner], 1,
             {
                 from: owner
             }
@@ -35,7 +35,7 @@ contract('Token Vesting Factory test', async accounts => {
 
     
     it('should fail on zero token address initialization', async () => {
-        await truffleAssert.fails(tokenVestingFactory.new(zeroAddress, 18),
+        await truffleAssert.fails(tokenVestingFactory.new(zeroAddress, 18,[owner], 1,),
             truffleAssert.ErrorType.REVERT            
         )
     })
@@ -257,100 +257,9 @@ contract('Token Vesting Factory test', async accounts => {
 
         tokenVestingAddress = await _tokenVestingFactory.getTokenVesting(beneficiary)
         
-        await truffleAssert.fails(                
-            _tokenVestingFactory.revoke(    
-                tokenVestingAddress,            
-                {
-                    from: attacker
-                }
-            ),
-            truffleAssert.ErrorType.REVERT            
-        )        
-                
+
     })
     
-    it('should revoke all tokens if admin revoke before start date', async () => {                        
-        beneficiary = accounts[1]
-        start = parseInt(Date.now()/1000) + 60*60*24 
-        cliff = 423491
-        initialShare = "12500000000000000000"
-        periodicShare = "300000000000000000"
-        revocable = true
-        vestingType = 1
-        let result
-
-        await _tokenVestingFactory.create(
-            beneficiary, start, cliff, initialShare, periodicShare, revocable, vestingType,
-            {
-                from: owner
-            }
-        )
-
-
-        tokenVestingAddress = await _tokenVestingFactory.getTokenVesting(beneficiary)
-        
-
-        
-        amount = 1000
-        await _amasaToken.approve(tokenVestingAddress, amount)
-        await _tokenVestingFactory.initialize(tokenVestingAddress, owner, amount)
-        
-        owner_balance_before_revoke = await _amasaToken.balanceOf(owner)
-        await _tokenVestingFactory.revoke(tokenVestingAddress,
-            {
-                from: owner
-            }
-        )
-        owner_balance_after_revoke = await _amasaToken.balanceOf(owner)
-
-        assert.equal((new BN(owner_balance_before_revoke).add(new BN(amount)).toString()), (new BN(owner_balance_after_revoke)).toString())
-                
-    })    
-
-
-    it('should revoke unreleased tokens if admin revoke after start date and before cliff date', async () => {                        
-        beneficiary = accounts[1]
-        start = parseInt(Date.now()/1000) 
-        cliff = 423491
-        initialShare = "12500000000000000000"
-        periodicShare = "300000000000000000"
-        revocable = true
-        vestingType = 1
-        let result
-
-        await _tokenVestingFactory.create(
-            beneficiary, start, cliff, initialShare, periodicShare, revocable, vestingType,
-            {
-                from: owner
-            }
-        )
-
-
-        tokenVestingAddress = await _tokenVestingFactory.getTokenVesting(beneficiary)
-        
-
-        
-        amount = 1000
-        await _amasaToken.approve(tokenVestingAddress, amount)
-        await _tokenVestingFactory.initialize(tokenVestingAddress, owner, amount)
-        
-        owner_balance_before_revoke = await _amasaToken.balanceOf(owner)
-        await _tokenVestingFactory.revoke(tokenVestingAddress,
-            {
-                from: owner
-            }
-        )
-        owner_balance_after_revoke = await _amasaToken.balanceOf(owner)
-        
-
-        vested = (new BN(amount)).mul(new BN(initialShare)).div(new BN(100)).div(new BN("1000000000000000000"))
-        assert.equal(
-            (new BN(owner_balance_before_revoke))
-            .add(new BN(amount))
-            .sub(vested).toString()
-            ,(new BN(owner_balance_after_revoke)).toString())
-                
-    })
 
     
 

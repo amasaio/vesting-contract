@@ -2,11 +2,12 @@
 
 pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/utils/math/SafeMath.sol";
-import "./BokkyPooBahsDateTimeLibrary.sol";
 
+
+import "./MultiSig.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "./BokkyPooBahsDateTimeLibrary.sol";
 
 /**
  * @title Ownable
@@ -37,14 +38,14 @@ contract Ownable {
         require(msg.sender == _owner, "onlyOwner");
         _;
     }
-    
+
     /**
     * @dev Returns the address of the current owner.
     */
     function owner() public view returns (address) {
         return _owner;
     }
-    
+
     /**
     * @dev Returns the address of the pending owner.
     */
@@ -71,7 +72,8 @@ contract Ownable {
     }
 }
 
-contract TokenVestingFactory is Ownable {
+contract TokenVestingFactory is Ownable, MultiSig {
+
 
     event TokenVestingCreated(address tokenVesting);
 
@@ -83,76 +85,79 @@ contract TokenVestingFactory is Ownable {
         bool isExist;
         // uint256 index;
     }
+
     mapping(address => BeneficiaryIndex) private _beneficiaryIndex;
     address[] private _beneficiaries;
     address private _tokenAddr;
     uint256 private _decimal;
-    
-    constructor (address tokenAddr, uint256 decimal) {
-      require(tokenAddr != address(0), "TokenVestingFactory: token address must not be zero");
 
-      _tokenAddr = tokenAddr;
-      _decimal = decimal;
-    }    
-    
+    constructor (address tokenAddr, uint256 decimal, address[] memory owners, uint256 threshold) {
+        require(tokenAddr != address(0), "TokenVestingFactory: token address must not be zero");
+
+        _tokenAddr = tokenAddr;
+        _decimal = decimal;
+        setupMultiSig(owners, threshold);
+    }
+
     function create(address beneficiary, uint256 start, uint256 cliff, uint256 initialShare, uint256 periodicShare, bool revocable, uint256 vestingType) onlyOwner public {
         require(!_beneficiaryIndex[beneficiary].isExist, "TokenVestingFactory: benficiery exists");
         require(vestingType != 0, "TokenVestingFactory: vestingType 0 is reserved");
-        
+
         address tokenVesting = address(new TokenVesting(_tokenAddr, beneficiary, start, cliff, initialShare, periodicShare, _decimal, revocable));
 
         _beneficiaries.push(beneficiary);
         _beneficiaryIndex[beneficiary].tokenVesting = tokenVesting;
         _beneficiaryIndex[beneficiary].vestingType = vestingType;
         _beneficiaryIndex[beneficiary].isExist = true;
-        
+
         emit TokenVestingCreated(tokenVesting);
     }
-    
+
     function initialize(address tokenVesting, address from, uint256 amount) public onlyOwner {
         TokenVesting(tokenVesting).initialize(from, amount);
     }
-  
+
     function update(address tokenVesting, uint256 start, uint256 cliff, uint256 initialShare, uint256 periodicShare, bool revocable) public onlyOwner {
         TokenVesting(tokenVesting).update(start, cliff, initialShare, periodicShare, revocable);
     }
-    
-    function revoke(address tokenVesting) public onlyOwner {
-        TokenVesting(tokenVesting).revoke(owner());
-    }
 
-    function getBeneficiaries(uint256 vestingType) public view returns(address[] memory) {
+
+    function getBeneficiaries(uint256 vestingType) public view returns (address[] memory) {
         uint256 j = 0;
         address[] memory beneficiaries = new address[](_beneficiaries.length);
-        
+
         for (uint256 i = 0; i < _beneficiaries.length; i++) {
             address beneficiary = _beneficiaries[i];
-            if ( _beneficiaryIndex[beneficiary].vestingType == vestingType || vestingType == 0 ) {
+            if (_beneficiaryIndex[beneficiary].vestingType == vestingType || vestingType == 0) {
                 beneficiaries[j] = beneficiary;
                 j++;
             }
         }
         return beneficiaries;
     }
-    
-    function getVestingType(address beneficiary) public view returns(uint256) {
+
+    function getVestingType(address beneficiary) public view returns (uint256) {
         require(_beneficiaryIndex[beneficiary].isExist, "TokenVestingFactory: benficiery does not exist");
         return _beneficiaryIndex[beneficiary].vestingType;
     }
 
-    function getTokenVesting(address beneficiary) public view returns(address) {
+    function getTokenVesting(address beneficiary) public view returns (address) {
         require(_beneficiaryIndex[beneficiary].isExist, "TokenVestingFactory: benficiery does not exist");
         return _beneficiaryIndex[beneficiary].tokenVesting;
     }
-    
-    function getTokenAddress() public view returns(address) {
+
+    function getTokenAddress() public view returns (address) {
         return _tokenAddr;
     }
 
-    function getDecimal() public view returns(uint256) {
-      return _decimal;
+    function getDecimal() public view returns (uint256) {
+        return _decimal;
     }
-    
+
+    function revoke(address tokenVesting) public onlyMultiSig{
+        TokenVesting(tokenVesting).revoke(owner());
+    }
+
 }
 
 /**
@@ -161,262 +166,267 @@ contract TokenVestingFactory is Ownable {
  * typical vesting scheme, with a cliff. Optionally revocable by the
  * owner.
  */
-contract TokenVesting is Ownable {
-  using SafeMath for uint256;
-  using SafeERC20 for IERC20;
+contract TokenVesting is Ownable {    
+    using SafeERC20 for IERC20;
 
-  event TokensReleased(address beneficiary, uint256 amount);
-  event TokenVestingRevoked(address refundAddress, uint256 amount);
-  event TokenVestingInitialized(address from, uint256 amount);
+    event TokenVestingUpdated(uint256 start, uint256 cliff, uint256 initialShare, uint256 periodicShare, bool revocable);
+    event TokensReleased(address beneficiary, uint256 amount);
+    event TokenVestingRevoked(address refundAddress, uint256 amount);
+    event TokenVestingInitialized(address from, uint256 amount);
 
-  enum Status { NotInitialized, Initialized, Revoked }
+    enum Status {NotInitialized, Initialized, Revoked}
 
-  // beneficiary of tokens after they are released
-  address private _beneficiary;
+    // beneficiary of tokens after they are released
+    address private _beneficiary;
 
-  uint256 private _cliff;
-  uint256 private _start;
-  address private _tokenAddr;
-  uint256 private _initialShare;
-  uint256 private _periodicShare;
-  uint256 private _decimal;
-  uint256 private _released;
+    uint256 private _cliff;
+    uint256 private _start;
+    address private _tokenAddr;
+    uint256 private _initialShare;
+    uint256 private _periodicShare;
+    uint256 private _decimal;
+    uint256 private _released;
 
-  bool private _revocable;
-  Status private _status;
+    bool private _revocable;
+    Status private _status;
 
-  /**
-   * @dev Creates a vesting contract that vests its balance of any ERC20 token to the
-   * beneficiary, gradually in a linear fashion. By then all
-   * of the balance will have vested.
-   * @param beneficiary address of the beneficiary to whom vested tokens are transferred
-   * @param cliff duration in seconds of the cliff in which tokens will begin to vest
-   * @param start the time (as Unix time) at which point vesting starts
-   * @param revocable whether the vesting is revocable or not
-   */
-  constructor(
-    address tokenAddr,
-    address beneficiary,
-    uint256 start,
-    uint256 cliff,
-    uint256 initialShare,
-    uint256 periodicShare,
-    uint256 decimal,
-    bool revocable
+    /**
+     * @dev Creates a vesting contract that vests its balance of any ERC20 token to the
+     * beneficiary, gradually in a linear fashion. By then all
+     * of the balance will have vested.
+     * @param beneficiary address of the beneficiary to whom vested tokens are transferred
+     * @param cliff duration in seconds of the cliff in which tokens will begin to vest
+     * @param start the time (as Unix time) at which point vesting starts
+     * @param revocable whether the vesting is revocable or not
+     */
+    constructor(
+        address tokenAddr,
+        address beneficiary,
+        uint256 start,
+        uint256 cliff,
+        uint256 initialShare,
+        uint256 periodicShare,
+        uint256 decimal,
+        bool revocable
     )
-    
-  {
-    require(beneficiary != address(0), "TokenVesting: beneficiary address must not be zero");
-    
-    _tokenAddr = tokenAddr;
-    _beneficiary = beneficiary;
-    _revocable = revocable;
-    _cliff = start.add(cliff);
-    _start = start;
-    _initialShare = initialShare;
-    _periodicShare = periodicShare;
-    _decimal = decimal;
-    _status = Status.NotInitialized;
-    
-  }
-  
-   /**
-   * @return TokenVesting details.
-   */
-  function getDetails() public view returns(address, uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256, bool, uint256) {
-    uint256 _total = IERC20(_tokenAddr).balanceOf(address(this)).add(_released);
-    uint256 _vested = _vestedAmount();
-    uint256 _releasable = _vestedAmount().sub(_released);
-    return (_beneficiary, _initialShare, _periodicShare, _start, _cliff, _total, _vested, _released, _releasable, _revocable, uint256(_status));
-  }
 
-  
-  /**
-   * @return the initial share of the beneficiary.
-   */
-  function getInitialShare() public view returns(uint256) {
-    return _initialShare;
-  }
-  
-  
-  /**
-   * @return the periodic share of the beneficiary.
-   */
-  function getPeriodicShare() public view returns(uint256) {
-    return _periodicShare;
-  }
-  
-  
-  /**
-   * @return the beneficiary of the tokens.
-   */
-  function getBeneficiary() public view returns(address) {
-    return _beneficiary;
-  }
+    {
+        require(beneficiary != address(0), "TokenVesting: beneficiary address must not be zero");
 
-  /**
-   * @return the start time of the token vesting.
-   */
-  function getStart() public view returns(uint256) {
-    return _start;
-  }
+        _tokenAddr = tokenAddr;
+        _beneficiary = beneficiary;
+        _revocable = revocable;
+        _cliff = start + cliff;
+        _start = start;
+        _initialShare = initialShare;
+        _periodicShare = periodicShare;
+        _decimal = decimal;
+        _status = Status.NotInitialized;
 
-  /**
-   * @return the cliff time of the token vesting.
-   */
-  function getCliff() public view returns(uint256) {
-    return _cliff;
-  }
-
-  /**
-   * @return the total amount of the token.
-   */
-  function getTotal() public view returns(uint256) {
-    return IERC20(_tokenAddr).balanceOf(address(this)).add(_released);
-  }
-
-  /**
-   * @return the amount of the vested token.
-   */
-  function getVested() public view returns(uint256) {
-    return _vestedAmount();
-  }
-
-  /**
-   * @return the amount of the token released.
-   */
-  function getReleased() public view returns(uint256) {
-    return _released;
-  }
-
-  /**
-   * @return the amount that has already vested but hasn't been released yet.
-   */
-  function getReleasable() public view returns(uint256) {
-    return _vestedAmount().sub(_released);
-  }
-
-  /**
-   * @return true if the vesting is revocable.
-   */
-  function isRevocable() public view returns(bool) {
-    return _revocable;
-  }
-  
-  /**
-   * @return true if the token is revoked.
-   */
-  function isRevoked() public view returns(bool) {
-    if (_status == Status.Revoked) {
-      return true;
-    } else {
-      return false;
     }
-  }
 
-   /**
-   * @return status.
-   */
-  function getStatus() public view returns(uint256) {
-    return uint256(_status);
-  }
-
-  /**
-   * @notice change status to initialized.
-   */
-  function initialize(address from, uint256 amount) public onlyOwner {
-
-    require(_status == Status.NotInitialized, "TokenVesting: status must be NotInitialized");
-
-      _status = Status.Initialized;
-      IERC20(_tokenAddr).safeTransferFrom(from, address(this), amount);
-      emit TokenVestingInitialized(address(from), amount);
-    
-  }
-
-   /**
-   * @notice update token vesting contract.
-   */
-  function update(
-    uint256 start,
-    uint256 cliff,
-    uint256 initialShare,
-    uint256 periodicShare,
-    bool revocable
-
-  ) public onlyOwner {
-
-    require(_status == Status.NotInitialized, "TokenVesting: status must be NotInitialized");
-    
-    _start = start;
-    _cliff = start.add(cliff);
-    _initialShare = initialShare;
-    _periodicShare = periodicShare;
-    _revocable = revocable;
-
-  }
-
-  /**
-   * @notice Transfers vested tokens to beneficiary.
-   */
-  function release() public {
-    require(_status != Status.NotInitialized, "TokenVesting: status is NotInitialized");
-    uint256 unreleased = getReleasable();
-
-    require(unreleased > 0, "TokenVesting: releasable amount is zero");
-
-    _released = _released.add(unreleased);
-
-    IERC20(_tokenAddr).safeTransfer(_beneficiary, unreleased);
-
-    emit TokensReleased(address(_beneficiary), unreleased);
-  }
-
-  /**
-   * @notice Allows the owner to revoke the vesting. Tokens already vested
-   * remain in the contract, the rest are returned to the owner.
-   */
-  function revoke(address refundAddress) public onlyOwner {
-    require(_revocable, "TokenVesting: contract is not revocable");
-    require(_status != Status.Revoked, "TokenVesting: status is Revoked");
-
-    uint256 balance = IERC20(_tokenAddr).balanceOf(address(this));
-
-    uint256 unreleased = getReleasable();
-    uint256 refund = balance.sub(unreleased);
-
-    _status = Status.Revoked;
-
-    IERC20(_tokenAddr).safeTransfer(refundAddress, refund);
-
-    emit TokenVestingRevoked(address(refundAddress), refund);
-  }
+    /**
+    * @return TokenVesting details.
+    */
+    function getDetails() public view returns (address, uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256, bool, uint256) {
+        uint256 _total = IERC20(_tokenAddr).balanceOf(address(this)) + _released;
+        uint256 _vested = _vestedAmount();
+        uint256 _releasable = _vestedAmount() - _released;
+        return (_beneficiary, _initialShare, _periodicShare, _start, _cliff, _total, _vested, _released, _releasable, _revocable, uint256(_status));
+    }
 
 
-  /**
-   * @dev Calculates the amount that has already vested.
-   */
-  function _vestedAmount() private view returns (uint256) {
-    uint256 currentBalance = IERC20(_tokenAddr).balanceOf(address(this));
-    uint256 totalBalance = currentBalance.add(_released);
-    uint256 initialRelease = totalBalance.mul(_initialShare).div(10**_decimal).div(100);
+    /**
+     * @return the initial share of the beneficiary.
+     */
+    function getInitialShare() public view returns (uint256) {
+        return _initialShare;
+    }
 
-    if (block.timestamp < _start)
-      return 0;
-	
-	if (_status == Status.Revoked)
-		return totalBalance;
-		
-    if (block.timestamp < _cliff)
-      return initialRelease;
 
-	uint256 monthlyRelease = totalBalance.mul(_periodicShare).div(10**_decimal).div(100);
-	uint256 _months = BokkyPooBahsDateTimeLibrary.diffMonths(_cliff, block.timestamp);
-	
-	if (initialRelease.add(monthlyRelease.mul(_months + 1)) >= totalBalance) {
-		return totalBalance;
-	} else {
-		return initialRelease.add(monthlyRelease.mul(_months + 1));
-	}
-  }
+    /**
+     * @return the periodic share of the beneficiary.
+     */
+    function getPeriodicShare() public view returns (uint256) {
+        return _periodicShare;
+    }
+
+
+    /**
+     * @return the beneficiary of the tokens.
+     */
+    function getBeneficiary() public view returns (address) {
+        return _beneficiary;
+    }
+
+    /**
+     * @return the start time of the token vesting.
+     */
+    function getStart() public view returns (uint256) {
+        return _start;
+    }
+
+    /**
+     * @return the cliff time of the token vesting.
+     */
+    function getCliff() public view returns (uint256) {
+        return _cliff;
+    }
+
+    /**
+     * @return the total amount of the token.
+     */
+    function getTotal() public view returns (uint256) {
+        return IERC20(_tokenAddr).balanceOf(address(this)) + _released;
+    }
+
+    /**
+     * @return the amount of the vested token.
+     */
+    function getVested() public view returns (uint256) {
+        return _vestedAmount();
+    }
+
+    /**
+     * @return the amount of the token released.
+     */
+    function getReleased() public view returns (uint256) {
+        return _released;
+    }
+
+    /**
+     * @return the amount that has already vested but hasn't been released yet.
+     */
+    function getReleasable() public view returns (uint256) {
+        return _vestedAmount() - _released;
+    }
+
+    /**
+     * @return true if the vesting is revocable.
+     */
+    function isRevocable() public view returns (bool) {
+        return _revocable;
+    }
+
+    /**
+     * @return true if the token is revoked.
+     */
+    function isRevoked() public view returns (bool) {
+        if (_status == Status.Revoked) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    /**
+    * @return status.
+    */
+    function getStatus() public view returns (uint256) {
+        return uint256(_status);
+    }
+
+    /**
+     * @notice change status to initialized.
+     */
+    function initialize(address from, uint256 amount) public onlyOwner {
+
+        require(_status == Status.NotInitialized, "TokenVesting: status must be NotInitialized");
+
+        _status = Status.Initialized;
+
+        emit TokenVestingInitialized(address(from), amount);
+
+        IERC20(_tokenAddr).safeTransferFrom(from, address(this), amount);
+
+    }
+
+    /**
+    * @notice update token vesting contract.
+    */
+    function update(
+        uint256 start,
+        uint256 cliff,
+        uint256 initialShare,
+        uint256 periodicShare,
+        bool revocable
+
+    ) public onlyOwner {
+
+        require(_status == Status.NotInitialized, "TokenVesting: status must be NotInitialized");
+
+        _start = start;
+        _cliff = start + cliff;
+        _initialShare = initialShare;
+        _periodicShare = periodicShare;
+        _revocable = revocable;
+
+        emit TokenVestingUpdated(_start, _cliff, _initialShare, _periodicShare, _revocable);
+
+    }
+
+    /**
+     * @notice Transfers vested tokens to beneficiary.
+     */
+    function release() public {
+        require(_status != Status.NotInitialized, "TokenVesting: status is NotInitialized");
+        uint256 unreleased = getReleasable();
+
+        require(unreleased > 0, "TokenVesting: releasable amount is zero");
+
+        _released = _released + unreleased;
+
+        emit TokensReleased(address(_beneficiary), unreleased);
+
+        IERC20(_tokenAddr).safeTransfer(_beneficiary, unreleased);
+    }
+
+    /**
+     * @notice Allows the owner to revoke the vesting. Tokens already vested
+     * remain in the contract, the rest are returned to the owner.
+     */
+    function revoke(address refundAddress) public onlyOwner {
+        require(_revocable, "TokenVesting: contract is not revocable");
+        require(_status != Status.Revoked, "TokenVesting: status is Revoked");
+
+        uint256 balance = IERC20(_tokenAddr).balanceOf(address(this));
+
+        uint256 unreleased = getReleasable();
+        uint256 refund = balance - unreleased;
+
+        _status = Status.Revoked;
+
+        emit TokenVestingRevoked(address(refundAddress), refund);
+        
+        IERC20(_tokenAddr).safeTransfer(refundAddress, refund);
+
+    }
+
+
+    /**
+     * @dev Calculates the amount that has already vested.
+     */
+    function _vestedAmount() private view returns (uint256) {
+        uint256 currentBalance = IERC20(_tokenAddr).balanceOf(address(this));
+        uint256 totalBalance = currentBalance + _released;
+        uint256 initialRelease = (totalBalance * _initialShare) / ((10 ** _decimal) * 100) ;
+
+        if (block.timestamp < _start)
+            return 0;
+
+        if (_status == Status.Revoked)
+            return totalBalance;
+
+        if (block.timestamp < _cliff)
+            return initialRelease;
+
+        uint256 monthlyRelease = (totalBalance * _periodicShare) / ((10 ** _decimal) * 100);
+        uint256 _months = BokkyPooBahsDateTimeLibrary.diffMonths(_cliff, block.timestamp);
+
+        if (initialRelease + (monthlyRelease * (_months + 1)) >= totalBalance) {
+            return totalBalance;
+        } else {
+            return initialRelease + (monthlyRelease * (_months + 1));
+        }
+    }
 }
