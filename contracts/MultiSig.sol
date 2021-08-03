@@ -94,7 +94,6 @@ contract MultiSig {
         bytes memory data
     ) internal returns (bool success) {
         uint256 gasToCall = gasleft()-2500;
-        emit thresholdEvent(gasToCall);
         assembly {
             success := call(gasToCall, to, value, add(data, 0x20), mload(data), 0, 0)
         }
