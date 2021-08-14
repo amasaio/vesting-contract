@@ -49,7 +49,7 @@ contract Ownable {
     /**
     * @dev Returns the address of the pending owner.
     */
-    function pendingOwner() public view returns (address) {
+    function pendingOwner() external view returns (address) {
         return _pendingOwner;
     }
 
@@ -57,14 +57,14 @@ contract Ownable {
      * @dev Allows the current owner to set the pendingOwner address.
      * @param newOwner The address to transfer ownership to.
      */
-    function transferOwnership(address newOwner) public onlyOwner {
+    function transferOwnership(address newOwner) external onlyOwner {
         _pendingOwner = newOwner;
     }
 
     /**
      * @dev Allows the pendingOwner address to finalize the transfer.
      */
-    function claimOwnership() public {
+    function claimOwnership() external {
         require(msg.sender == _pendingOwner, "onlyPendingOwner");
         emit OwnershipTransferred(_owner, _pendingOwner);
         _owner = _pendingOwner;
@@ -99,7 +99,7 @@ contract TokenVestingFactory is Ownable, MultiSig {
         setupMultiSig(owners, threshold);
     }
 
-    function create(address beneficiary, uint256 start, uint256 cliff, uint256 initialShare, uint256 periodicShare, bool revocable, uint256 vestingType) onlyOwner public {
+    function create(address beneficiary, uint256 start, uint256 cliff, uint256 initialShare, uint256 periodicShare, bool revocable, uint256 vestingType) onlyOwner external {
         require(!_beneficiaryIndex[beneficiary].isExist, "TokenVestingFactory: benficiery exists");
         require(vestingType != 0, "TokenVestingFactory: vestingType 0 is reserved");
 
@@ -113,16 +113,16 @@ contract TokenVestingFactory is Ownable, MultiSig {
         emit TokenVestingCreated(tokenVesting);
     }
 
-    function initialize(address tokenVesting, address from, uint256 amount) public onlyOwner {
+    function initialize(address tokenVesting, address from, uint256 amount) external onlyOwner {
         TokenVesting(tokenVesting).initialize(from, amount);
     }
 
-    function update(address tokenVesting, uint256 start, uint256 cliff, uint256 initialShare, uint256 periodicShare, bool revocable) public onlyOwner {
+    function update(address tokenVesting, uint256 start, uint256 cliff, uint256 initialShare, uint256 periodicShare, bool revocable) external onlyOwner {
         TokenVesting(tokenVesting).update(start, cliff, initialShare, periodicShare, revocable);
     }
 
 
-    function getBeneficiaries(uint256 vestingType) public view returns (address[] memory) {
+    function getBeneficiaries(uint256 vestingType) external view returns (address[] memory) {
         uint256 j = 0;
         address[] memory beneficiaries = new address[](_beneficiaries.length);
 
@@ -136,25 +136,25 @@ contract TokenVestingFactory is Ownable, MultiSig {
         return beneficiaries;
     }
 
-    function getVestingType(address beneficiary) public view returns (uint256) {
+    function getVestingType(address beneficiary) external view returns (uint256) {
         require(_beneficiaryIndex[beneficiary].isExist, "TokenVestingFactory: benficiery does not exist");
         return _beneficiaryIndex[beneficiary].vestingType;
     }
 
-    function getTokenVesting(address beneficiary) public view returns (address) {
+    function getTokenVesting(address beneficiary) external view returns (address) {
         require(_beneficiaryIndex[beneficiary].isExist, "TokenVestingFactory: benficiery does not exist");
         return _beneficiaryIndex[beneficiary].tokenVesting;
     }
 
-    function getTokenAddress() public view returns (address) {
+    function getTokenAddress() external view returns (address) {
         return _tokenAddr;
     }
 
-    function getDecimal() public view returns (uint256) {
+    function getDecimal() external view returns (uint256) {
         return _decimal;
     }
 
-    function revoke(address tokenVesting) public onlyMultiSig{
+    function revoke(address tokenVesting) external onlyMultiSig{
         TokenVesting(tokenVesting).revoke(owner());
     }
 
@@ -228,7 +228,7 @@ contract TokenVesting is Ownable {
     /**
     * @return TokenVesting details.
     */
-    function getDetails() public view returns (address, uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256, bool, uint256) {
+    function getDetails() external view returns (address, uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256, bool, uint256) {
         uint256 _total = IERC20(_tokenAddr).balanceOf(address(this)) + _released;
         uint256 _vested = _vestedAmount();
         uint256 _releasable = _vestedAmount() - _released;
@@ -239,7 +239,7 @@ contract TokenVesting is Ownable {
     /**
      * @return the initial share of the beneficiary.
      */
-    function getInitialShare() public view returns (uint256) {
+    function getInitialShare() external view returns (uint256) {
         return _initialShare;
     }
 
@@ -247,7 +247,7 @@ contract TokenVesting is Ownable {
     /**
      * @return the periodic share of the beneficiary.
      */
-    function getPeriodicShare() public view returns (uint256) {
+    function getPeriodicShare() external view returns (uint256) {
         return _periodicShare;
     }
 
@@ -255,42 +255,42 @@ contract TokenVesting is Ownable {
     /**
      * @return the beneficiary of the tokens.
      */
-    function getBeneficiary() public view returns (address) {
+    function getBeneficiary() external view returns (address) {
         return _beneficiary;
     }
 
     /**
      * @return the start time of the token vesting.
      */
-    function getStart() public view returns (uint256) {
+    function getStart() external view returns (uint256) {
         return _start;
     }
 
     /**
      * @return the cliff time of the token vesting.
      */
-    function getCliff() public view returns (uint256) {
+    function getCliff() external view returns (uint256) {
         return _cliff;
     }
 
     /**
      * @return the total amount of the token.
      */
-    function getTotal() public view returns (uint256) {
+    function getTotal() external view returns (uint256) {
         return IERC20(_tokenAddr).balanceOf(address(this)) + _released;
     }
 
     /**
      * @return the amount of the vested token.
      */
-    function getVested() public view returns (uint256) {
+    function getVested() external view returns (uint256) {
         return _vestedAmount();
     }
 
     /**
      * @return the amount of the token released.
      */
-    function getReleased() public view returns (uint256) {
+    function getReleased() external view returns (uint256) {
         return _released;
     }
 
@@ -304,14 +304,14 @@ contract TokenVesting is Ownable {
     /**
      * @return true if the vesting is revocable.
      */
-    function isRevocable() public view returns (bool) {
+    function isRevocable() external view returns (bool) {
         return _revocable;
     }
 
     /**
      * @return true if the token is revoked.
      */
-    function isRevoked() public view returns (bool) {
+    function isRevoked() external view returns (bool) {
         if (_status == Status.Revoked) {
             return true;
         } else {
@@ -322,7 +322,7 @@ contract TokenVesting is Ownable {
     /**
     * @return status.
     */
-    function getStatus() public view returns (uint256) {
+    function getStatus() external view returns (uint256) {
         return uint256(_status);
     }
 
@@ -351,7 +351,7 @@ contract TokenVesting is Ownable {
         uint256 periodicShare,
         bool revocable
 
-    ) public onlyOwner {
+    ) external onlyOwner {
 
         require(_status == Status.NotInitialized, "TokenVesting: status must be NotInitialized");
 
@@ -368,7 +368,7 @@ contract TokenVesting is Ownable {
     /**
      * @notice Transfers vested tokens to beneficiary.
      */
-    function release() public {
+    function release() external {
         require(_status != Status.NotInitialized, "TokenVesting: status is NotInitialized");
         uint256 unreleased = getReleasable();
 
@@ -385,7 +385,7 @@ contract TokenVesting is Ownable {
      * @notice Allows the owner to revoke the vesting. Tokens already vested
      * remain in the contract, the rest are returned to the owner.
      */
-    function revoke(address refundAddress) public onlyOwner {
+    function revoke(address refundAddress) external onlyOwner {
         require(_revocable, "TokenVesting: contract is not revocable");
         require(_status != Status.Revoked, "TokenVesting: status is Revoked");
 
