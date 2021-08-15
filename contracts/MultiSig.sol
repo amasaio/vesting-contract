@@ -24,6 +24,7 @@ contract MultiSig {
 
     uint256 internal _threshold;
     uint256 public _nonce;
+    bytes32 public _currentHash;
 
     /**
      * @dev Throws if called by any account other than the this contract address.
@@ -48,7 +49,7 @@ contract MultiSig {
     ) internal {
         require(_threshold == 0, "MS11");
         require(threshold <= signers.length, "MS01");
-        require(threshold >= 1, "MS02");
+        require(threshold > 1, "MS02");
 
         address signer;
         for (uint256 i = 0; i < signers.length; i++) {
@@ -66,31 +67,29 @@ contract MultiSig {
 
     /**
      * @dev Allows to execute a Safe transaction confirmed by required number of signers.
-     * @param value Ether value of transaction.
      * @param data Data payload of transaction.
      */
     function execTransaction(
-        uint256 value,
         bytes calldata data
-    ) public payable virtual returns (bool success) {
+    ) external returns (bool success) {
         bytes32 txHash;
         // Use scope here to limit variable lifetime and prevent `stack too deep` errors
         {
             bytes memory txHashData =
             encodeTransactionData(
             // Transaction info
-                value,
                 data,
                 _nonce
             );
             // Increase nonce and execute transaction.
             _nonce++;
+            _currentHash = 0x0;
             txHash = keccak256(txHashData);
             checkSignatures(txHash);
         }
         // Use scope here to limit variable lifetime and prevent `stack too deep` errors
         {            
-            success = execute(value, data);
+            success = execute(data);
             if (success) emit ExecutionSuccess(txHash);
             else emit ExecutionFailure(txHash);
         }
@@ -100,25 +99,23 @@ contract MultiSig {
     /**
      * @dev Get the current value of nonce
      */
-    function getNonce() public view returns (uint256){
+    function getNonce() external view returns (uint256){
         return _nonce;
     }
 
 
     /**
      * @dev Execute a transaction
-     * @param value The value that is transfered during the execution
      * @param data the encoded data of the transaction
      */
     function execute(
-        uint256 value,
         bytes memory data
     ) internal returns (bool success) {
         address to = address (this);
         // We require some gas to emit the events (at least 2500) after the execution
         uint256 gasToCall = gasleft() - 2500;
         assembly {
-            success := call(gasToCall, to, value, add(data, 0x20), mload(data), 0, 0)
+            success := call(gasToCall, to, 0, add(data, 0x20), mload(data), 0, 0)
         }
     }
 
@@ -130,7 +127,7 @@ contract MultiSig {
     function checkSignatures(bytes32 dataHash) public view {
         uint256 threshold = _threshold;
         // Check that a threshold is set
-        require(threshold >= 1, "MS02");
+        require(threshold > 1, "MS02");
         address[] memory alreadySigned = getSignersOfHash(dataHash);
 
         require(alreadySigned.length >= threshold, "MS06");
@@ -165,16 +162,24 @@ contract MultiSig {
 
     /**
      * @dev Marks a hash as approved. This can be used to validate a hash that is used by a signature.
-     * @param value Ether value.
      * @param data Data payload.
      */
     function approveHash(
-        uint256 value,
         bytes calldata data
-    ) public {
+    ) external {
         require(existSigner(msg.sender), "MS07");
-        bytes32 hashToApprove = getTransactionHash(value, data, _nonce);
 
+        bytes32 hashToApprove = getTransactionHash(data, _nonce);
+        bytes32 hashToCancel = getCancelTransactionHash(_nonce);
+        
+        if(_currentHash == 0x0) {
+            require(hashToApprove != hashToCancel, "MS12");
+            _currentHash = hashToApprove;
+        }
+        else {
+            require(_currentHash == hashToApprove || hashToApprove == hashToCancel, "MS13");
+        }
+        
         approvedHashes[msg.sender][hashToApprove] = 1;
         emit ApproveHash(hashToApprove, msg.sender);
     }
@@ -182,20 +187,30 @@ contract MultiSig {
 
     /**
      * @dev Returns the bytes that are hashed to be signed by owners.
-     * @param value Ether value.
      * @param data Data payload.
      * @param nonce Transaction nonce.
      */    
     function encodeTransactionData(
-        uint256 value,
         bytes calldata data,
         uint256 nonce
     ) public pure returns (bytes memory) {
         bytes32 safeTxHash =
         keccak256(
             abi.encode(
-                value,
                 keccak256(data),
+                nonce
+            )
+        );
+        return abi.encodePacked(safeTxHash);
+    }
+
+    function encodeCancelTransactionData(
+        uint256 nonce
+    ) public pure returns (bytes memory) {
+        bytes32 safeTxHash =
+        keccak256(
+            abi.encode(
+                keccak256(""),
                 nonce
             )
         );
@@ -204,15 +219,19 @@ contract MultiSig {
 
     /**
      * @dev Returns hash to be signed by owners.
-     * @param value Ether value.
      * @param data Data payload.
      */
     function getTransactionHash(
-        uint256 value,
         bytes calldata data,
         uint256 nonce
     ) public pure returns (bytes32) {
-        return keccak256(encodeTransactionData(value, data, nonce));
+        return keccak256(encodeTransactionData(data, nonce));
+    }
+
+    function getCancelTransactionHash(
+        uint256 nonce
+    ) public pure returns (bytes32) {
+        return keccak256(encodeCancelTransactionData(nonce));
     }
 
     
@@ -236,7 +255,7 @@ contract MultiSig {
     /**
      * @dev Get the list of all signers.     
      */
-    function getSigners() public view returns (address[] memory ) {
+    function getSigners() external view returns (address[] memory ) {
         address[] memory ret = new address[](_signers.length) ;
         for (uint256 i = 0; i < _signers.length; i++) {
             ret[i] = _signers[i];
@@ -253,7 +272,7 @@ contract MultiSig {
         uint256 threshold
     ) public onlyMultiSig{
         require(threshold <= _signers.length, "MS01");
-        require(threshold >= 1, "MS02");
+        require(threshold > 1, "MS02");
         _threshold = threshold;
         emit thresholdEvent(threshold);
     }
@@ -262,7 +281,7 @@ contract MultiSig {
     /**
      * @dev Get threshold value.
      */
-    function getThreshold() public view returns(uint256) {
+    function getThreshold() external view returns(uint256) {
         return _threshold;
     }
 
@@ -275,7 +294,7 @@ contract MultiSig {
     function addSigner(
         address signer,
         uint256 threshold
-    ) public onlyMultiSig{
+    ) external onlyMultiSig{
         require(!existSigner(signer), "MS03");
         require(signer != address(0), "MS04");
         require(signer != address(this), "MS05");
@@ -293,9 +312,9 @@ contract MultiSig {
     function removeSigner(
         address signer,
         uint256 threshold
-    ) public onlyMultiSig{
+    ) external onlyMultiSig{
         require(existSigner(signer), "MS07");
-        require(_signers.length - 1 >= 1, "MS09");
+        require(_signers.length - 1 > 1, "MS09");
         require(_signers.length - 1 >= threshold, "MS10");
         require(signer != address(0), "MS04");
  
@@ -320,7 +339,7 @@ contract MultiSig {
     function changeSigner(
         address oldSigner,
         address newSigner
-    ) public onlyMultiSig{
+    ) external onlyMultiSig{
         require(existSigner(oldSigner), "MS07");
         require(!existSigner(newSigner), "MS03");
         require(newSigner != address(0), "MS04");

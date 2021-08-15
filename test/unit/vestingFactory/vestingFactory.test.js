@@ -26,7 +26,7 @@ contract('Token Vesting Factory test', async accounts => {
             }
         )
         _tokenVestingFactory = await tokenVestingFactory.new(
-            _amasaToken.address, 18,[owner], 1,
+            _amasaToken.address, 18,[owner, accounts[1]], 2,
             {
                 from: owner
             }
