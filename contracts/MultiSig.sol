@@ -24,7 +24,7 @@ contract MultiSig {
 
     uint256 internal _threshold;
     uint256 public _nonce;
-    bytes32 public _currentHash = 0x0;
+    bytes32 public _currentHash;
 
     /**
      * @dev Throws if called by any account other than the this contract address.
@@ -170,11 +170,16 @@ contract MultiSig {
         require(existSigner(msg.sender), "MS07");
 
         bytes32 hashToApprove = getTransactionHash(data, _nonce);
-        bytes32 hashOfCancel = getCancelTransactionHash(_nonce);
-        require(_currentHash == 0x0 || (_currentHash == hashToApprove || hashToApprove == hashOfCancel), "MS27");//todo change number
-
-        _currentHash = hashToApprove;
-
+        bytes32 hashToCancel = getCancelTransactionHash(_nonce);
+        
+        if(_currentHash == 0x0) {
+            require(hashToApprove != hashToCancel, "MS12");
+            _currentHash = hashToApprove;
+        }
+        else {
+            require(_currentHash == hashToApprove || hashToApprove == hashToCancel, "MS13");
+        }
+        
         approvedHashes[msg.sender][hashToApprove] = 1;
         emit ApproveHash(hashToApprove, msg.sender);
     }
@@ -267,7 +272,7 @@ contract MultiSig {
         uint256 threshold
     ) public onlyMultiSig{
         require(threshold <= _signers.length, "MS01");
-        require(threshold >= 1, "MS02");
+        require(threshold > 1, "MS02");
         _threshold = threshold;
         emit thresholdEvent(threshold);
     }
@@ -309,7 +314,7 @@ contract MultiSig {
         uint256 threshold
     ) external onlyMultiSig{
         require(existSigner(signer), "MS07");
-        require(_signers.length - 1 >= 1, "MS09");
+        require(_signers.length - 1 > 1, "MS09");
         require(_signers.length - 1 >= threshold, "MS10");
         require(signer != address(0), "MS04");
  
