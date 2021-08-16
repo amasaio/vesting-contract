@@ -7,5 +7,5 @@ const tokenVestingFactory = artifacts.require("TokenVestingFactory");
 
 module.exports = function (deployer) {
 	const accounts = process.env.SIGNERS.split(' ');
-	deployer.deploy(tokenVestingFactory, process.env.TOKEN_ADDRESS, process.env.VESTING_DECIMAL, accounts, process.env.THRESHOULD);
+	deployer.deploy(tokenVestingFactory, process.env.TOKEN_ADDRESS, process.env.VESTING_DECIMAL, accounts, process.env.THRESHOLD);
 };
