@@ -38,8 +38,8 @@ module.exports = {
 		},		
 		network_id: 0x1,
 		from: process.env.OWNER_ADDRESS,
-		gas: 2 * 1000000,
-		gasPrice: utils.toWei('105', 'gwei')
+    gas: 5 * 1000000,
+    gasPrice: utils.toWei('75', 'gwei')
 	}    
 
   },
